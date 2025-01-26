@@ -1,5 +1,8 @@
 # Harmonia Spell Checker
 
+
+pip install harmoniapy
+
 A fast, (pretty) accurate python spell checker, inspired by pyspellchecker. Features:
 
 - Optimized dictionary loading
