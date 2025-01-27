@@ -43,42 +43,92 @@ def edits1(word: str) -> Set[str]:
     
     return operations
 
-def generate_suggestions(word: str, dictionary: Dictionary, max_edits: int = 2) -> List[str]:
-    """Optimized suggestion generator with candidate prioritization"""
+def weighted_distance(s1: str, s2: str) -> float:
+    """
+    Calculate weighted edit distance considering common typing errors
+    and character positions.
+    """
+    base_distance = levenshtein_distance(s1, s2)
+    
+    # Apply position-based weighting
+    if len(s1) > 2 and len(s2) > 2:
+        if s1[0] == s2[0]:  # Same first letter
+            base_distance *= 0.8
+        if s1[-1] == s2[-1]:  # Same last letter
+            base_distance *= 0.9
+            
+    # Vowel substitution should cost less
+    vowels = set('aeiou')
+    vowel_diff = sum(1 for c1, c2 in zip(s1, s2) 
+                    if c1 != c2 and c1 in vowels and c2 in vowels)
+    if vowel_diff:
+        base_distance *= 0.95
+        
+    return base_distance
+
+def generate_suggestions(word: str, dictionary: Dictionary, max_suggestions: int = 5) -> List[str]:
+    """Generate spelling suggestions using multiple algorithms"""
     original_lower = word.lower()
-    candidates = defaultdict(int)
+    candidates = {}
     
-    # 1. Check common misspellings first
-    if correction := dictionary.common_misspellings.get(original_lower):
-        candidates[correction] += dictionary.get_frequency(correction) * 2
+    # 1. Generate edit distance variations
+    edit_variations = set()
+    # Deletions
+    edit_variations.update(original_lower[:i] + original_lower[i+1:]
+                         for i in range(len(original_lower)))
+    # Transpositions
+    edit_variations.update(original_lower[:i] + original_lower[i+1] + original_lower[i] + original_lower[i+2:]
+                         for i in range(len(original_lower)-1))
+    # Replacements (focusing on common substitutions)
+    substitutions = {
+        'a': 'eiouy', 'e': 'aiouy', 'i': 'aeouy', 'o': 'aeiuy', 'u': 'aeioy',
+        'y': 'aeiou', 'c': 'sk', 'k': 'c', 's': 'c', 'v': 'fw', 'w': 'v',
+        'f': 'phv', 'j': 'g', 'g': 'j'
+    }
+    for i, c in enumerate(original_lower):
+        if c in substitutions:
+            edit_variations.update(
+                original_lower[:i] + r + original_lower[i+1:]
+                for r in substitutions[c]
+            )
     
-    # 2. Check Soundex matches using precomputed cache
-    soundex_code = soundex(original_lower)
-    for dict_word, s_code in dictionary.soundex_cache.items():
-        if s_code == soundex_code:
-            candidates[dict_word] += dictionary.get_frequency(dict_word)
+    # 2. Check variations against dictionary
+    word_len = len(original_lower)
+    for variation in edit_variations:
+        if variation in dictionary.words:
+            distance = levenshtein_distance(original_lower, variation)
+            if distance <= 2:  # Only consider close matches
+                candidates[variation] = distance
     
-    # 3. Generate single-edit candidates
-    for edit in edits1(original_lower):
-        if edit in dictionary:
-            candidates[edit] += dictionary.get_frequency(edit)
+    # 3. Check similar length words with same first letter
+    similar_words = dictionary.get_similar_length_words(original_lower, tolerance=1)
+    filtered_words = {
+        w for w in similar_words 
+        if w[0] == original_lower[0]
+        and abs(len(w) - word_len) <= 1
+    }
     
-    # 4. Limited double-edit candidates for common error patterns
-    if max_edits >= 2 and len(original_lower) > 3:
-        common_edits = (original_lower[:i] + c + original_lower[i+1:]
-                       for i in range(len(original_lower))
-                       for c in 'aeiou')
-        for edit in common_edits:
-            if edit in dictionary:
-                candidates[edit] += dictionary.get_frequency(edit)
+    for dict_word in filtered_words:
+        if dict_word not in candidates:  # Avoid rechecking
+            distance = levenshtein_distance(original_lower, dict_word)
+            if distance <= 2:
+                candidates[dict_word] = distance
     
-    # 5. Remove original word if present
-    candidates.pop(original_lower, None)
+    # 4. Add phonetic matches
+    soundex_matches = {
+        w for w in filtered_words
+        if dictionary.soundex_cache.get(w) == soundex(original_lower)
+    }
+    for word in soundex_matches:
+        if word not in candidates:
+            distance = levenshtein_distance(original_lower, word)
+            if distance <= 2:
+                candidates[word] = distance
     
-    # Sort by frequency then alphabetical order
-    sorted_words = sorted(
+    # Sort by edit distance and frequency
+    sorted_candidates = sorted(
         candidates.items(),
-        key=lambda x: (-x[1], x[0]),
+        key=lambda x: (x[1], -dictionary.get_frequency(x[0]), x[0])
     )
     
-    return [word for word, _ in sorted_words[:5]]
+    return [word for word, _ in sorted_candidates[:max_suggestions]]

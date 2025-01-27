@@ -1,32 +1,55 @@
 # Harmonia Spell Checker
 
+A fast, (pretty) accurate Python spell checker, inspired by pyspellchecker.
 
+## Installation
+```bash
 pip install harmoniapy
+```
 
-A fast, (pretty) accurate python spell checker, inspired by pyspellchecker. Features:
-
+## Features
 - Optimized dictionary loading
 - Phonetic (Soundex) matching
 - Hyphen/quote variation support
 - Levenshtein distance-based suggestions
+- HTML report generation with hover suggestions
 
 ## CLI Usage
 ```bash
-harmonia check file.txt -> shows errors
-harmonia check file.txt --suggest -> shows errors + suggestions
+# Show errors
+harmonia check file.txt
+
+# Show errors with suggestions
+harmonia check file.txt --suggest
+
+# Generate HTML report with hover suggestions
+harmonia check file.txt --suggest --html report.html
 ```
 
 ## Python API Usage
 ```python
 from harmonia import Dictionary, check_file
 
-dictionary = Dictionary() #only english right now
+# Initialize dictionary (English only for now)
+dictionary = Dictionary()
+
+# Check file with suggestions
 errors = check_file("file.txt", dictionary, suggest=True)
 
+# Process errors
 for error in errors:
     print(f"Error: {error['word']} at line {error['line']}")
     if error['suggestions']:
         print(f"Suggestions: {', '.join(error['suggestions'])}")
 
+# Generate HTML report
+from harmonia.formatters import generate_html_report
+with open("file.txt") as f:
+    text = f.read()
+html_report = generate_html_report(text, errors)
+with open("report.html", "w") as f:
+    f.write(html_report)
+```
 
-Check works well!
+## HTML Report
+The HTML report shows the text with red underlines for misspelled words. Hover over any underlined word to see spelling suggestions.

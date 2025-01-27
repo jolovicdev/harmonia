@@ -30,32 +30,14 @@ class Dictionary:
         self.frequency: Dict[str, int] = defaultdict(int)
         self.soundex_cache: Dict[str, str] = {}
         self.word_lengths: Dict[int, Set[str]] = defaultdict(set)
+        
+        # Remove hardcoded misspellings
+        self.common_misspellings = {}
 
-        # Some typical or project-specific misspellings
-        self.common_misspellings = {
-            'quik': 'quick',
-            'wulf': 'wolf',
-            'fliwers': 'flowers',
-            'throgh': 'through',
-            'soond': 'sound',
-            'strainge': 'strange',
-            'morrning': 'morning',
-            'comming': 'coming',
-            'walkked': 'walked',
-            'grandmuther': 'grandmother',
-            'denk': 'dense',
-            'lzy': 'lazy',
-            'dogg': 'dog',
-            'onse': 'once',
-            'timme': 'time'
-        }
-
-        # You can change this path to a more suitable location if desired
         self.data_dir = os.path.join(os.path.dirname(__file__), 'data')
         self.dict_path = os.path.join(self.data_dir, 'english_dictionary.txt')
         self.freq_path = os.path.join(self.data_dir, 'word_freq.txt')
 
-        # Ensure local files exist before loading
         self._ensure_data_files()
         self.load()
 
@@ -82,7 +64,8 @@ class Dictionary:
             with open(self.dict_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     word = line.strip().lower()
-                    if re.fullmatch(r'^[a-z]+$', word):
+                    # Accept words with letters and apostrophes
+                    if re.match(r"^[a-z']+$", word):
                         valid_words.add(word)
                         word_count += 1
                         if word_count % 50000 == 0:
@@ -95,19 +78,17 @@ class Dictionary:
             self.words.update(valid_words)
             print(f"Total words loaded: {word_count}")
 
-            # Load frequency data
-            if not os.path.exists(self.freq_path):
-                self._download(FREQUENCY_URL, self.freq_path)
+            # Add basic word forms that might be missing
+            for word in list(self.words):
+                # Add common plural forms
+                if word.endswith('y'):
+                    self.words.add(word[:-1] + 'ies')
+                elif not word.endswith('s'):
+                    self.words.add(word + 's')
 
-            with open(self.freq_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    parts = line.strip().split('\t')
-                    if len(parts) == 2:
-                        word, freq = parts[0].lower(), parts[1]
-                        try:
-                            self.frequency[word] = int(freq)
-                        except ValueError:
-                            continue
+            # Add all common misspelling corrections to the dictionary
+            for correct in self.common_misspellings.values():
+                self.words.add(correct.lower())
 
         except KeyboardInterrupt:
             print("\nDictionary loading interrupted")
@@ -125,17 +106,6 @@ class Dictionary:
                         # Skip malformed frequency lines
                         continue
 
-        # Add known misspellings and corrections to the word set
-        # Add misspellings and precompute their data
-        for word in self.common_misspellings.keys():
-            self.words.add(word)
-            self.soundex_cache[word] = soundex(word)
-            self.word_lengths[len(word)].add(word)
-        for word in self.common_misspellings.values():
-            self.words.add(word)
-            self.soundex_cache[word] = soundex(word)
-            self.word_lengths[len(word)].add(word)
-
         # Manually ensure a few crucial words are present
         self.words.update(['quick', 'lazy', 'wolf'])
 
@@ -150,21 +120,46 @@ class Dictionary:
             raise RuntimeError(f"Failed to download {url}: {e}")
 
     def __contains__(self, word: str) -> bool:
-        """
-        Check if a word is in the dictionary. Case-insensitive with cache.
-        """
+        """Optimized dictionary lookup"""
+        if not word or len(word) < 2:
+            return False
+        
         lower_word = word.lower()
+        
+        # Direct word check
         if lower_word in self.words:
             return True
-        # Check hyphen variations (e.g. 'mother-in-law' vs 'motherinlaw')
-        return any(
-            part in self.words
-            for part in re.split(r"[-']", lower_word)
-            if part
-        )
+        
+        # Quick check for common misspellings
+        if lower_word in self.common_misspellings:
+            return False
+        
+        # Only check possessives for words ending in 's
+        if lower_word.endswith("'s"):
+            return lower_word[:-2] in self.words
+            
+        # Only check hyphens if word contains hyphen
+        if '-' in lower_word:
+            return all(part in self.words 
+                      for part in lower_word.split('-') 
+                      if part)
+            
+        return False
 
     def get_frequency(self, word: str) -> int:
         """
         Retrieve the known frequency of a word; returns 0 if unknown.
         """
         return self.frequency.get(word.lower(), 0)
+
+    def get_similar_length_words(self, word: str, tolerance: int = 1) -> Set[str]:
+        """Optimized similar word lookup"""
+        word_len = len(word)
+        similar_words = set()
+        
+        # Only check exact length and ±1
+        for length in range(max(1, word_len - tolerance), 
+                           min(word_len + tolerance + 1, max(self.word_lengths.keys()) + 1)):
+            similar_words.update(self.word_lengths.get(length, set()))
+        
+        return similar_words
