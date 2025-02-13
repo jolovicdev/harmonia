@@ -13,8 +13,7 @@ DICTIONARY_URL = (
     "https://raw.githubusercontent.com/dwyl/english-words/refs/heads/master/words.txt"
 )
 FREQUENCY_URL = (
-    "https://raw.githubusercontent.com/IlyaSemenov/wikipedia-word-frequency/"
-    "master/results/enwiki-2023-04-13.txt"
+    "https://raw.githubusercontent.com/IlyaSemenov/wikipedia-word-frequency/master/results/enwiki-2023-04-13.txt"
 )
 
 
