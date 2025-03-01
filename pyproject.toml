@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "harmoniapy"
+version = "1.2.0"
+description = "Fast and accurate Python spell checker, a powerful alternative to pyspellchecker"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Dušan Jolović", email = "jolovic@pm.me"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Text Processing :: Linguistic",
+    "Topic :: Text Processing :: Filters"
+]
+keywords = ["spell", "checker", "spelling", "correction", "nlp"]
+dependencies = [
+    "requests>=2.25.0",
+    "typing-extensions>=4.0.0",
+    "importlib-metadata>=1.0.0; python_version < '3.8'"
+]
+
+[project.scripts]
+harmonia = "harmonia.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/jolovicdev/harmonia"
